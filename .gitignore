@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.DS_Store
+*_smoke.jsonl
+*_smoke.png
+*_smoke_report.md
+.env
