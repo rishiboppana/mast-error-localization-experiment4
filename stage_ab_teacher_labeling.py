@@ -136,14 +136,11 @@ SUMMARIZER_SYS, SUMMARIZER_USER = load_prompt("summarizer.md")
 STUDENT_STAGE1_SYS, STUDENT_STAGE1_USER = load_prompt("stage1.md")
 STUDENT_STAGE1_SYS = STUDENT_STAGE1_SYS.replace("{modes}", MODES_TEXT)
 
-# Plan A2: same base prompt, plus (1) explicit routing-metadata warning and
-# (2) a stronger DEFAULT-TO-NONE push, since training-data false positives are
-# worse than eval-run false positives.
+# Plan A2: same base prompt (which now has its own FRAMEWORK-NOISE CHECK
+# covering routing metadata and Orchestrator-restatement, so that part no
+# longer needs a teacher-only addendum) plus a stronger DEFAULT-TO-NONE push,
+# since training-data false positives are worse than eval-run false positives.
 _TEACHER_ADDENDUM = """
-
-ROUTING METADATA: Lines like "Next speaker <Agent>" are routing metadata
-inserted by the multi-agent framework, not a statement by any agent. Never
-cite them as evidence for any mode, especially 2.1 (Conversation Reset).
 
 STRICT DEFAULT TO NONE: This label becomes permanent training data. A false
 positive here is worse than a false positive in a single eval run, because a
@@ -219,11 +216,15 @@ STAGE1_SCHEMA = {
     "strict": True,
     "schema": {
         "type": "object",
+        # Property order matches the generation order we want: reasoning is produced
+        # before the verdict, same as the REASONING/MODE/EVIDENCE order in stage1.md,
+        # so the model's chain-of-thought precedes (and can inform) modes/evidence.
         "properties": {
+            "reasoning": {"type": "string", "description": "Brief (2-4 sentence) step-by-step check per the system prompt, written BEFORE deciding modes/evidence."},
             "modes": {"type": "array", "items": {"type": "string", "enum": VALID_MODES}},
             "evidence": {"type": "string", "description": "Exact quote(s) supporting each listed mode. Empty string if modes is empty."},
         },
-        "required": ["modes", "evidence"],
+        "required": ["reasoning", "modes", "evidence"],
         "additionalProperties": False,
     },
 }
@@ -238,22 +239,23 @@ def label_one(client: OpenAI, model: str, system: str, user: str, retries: int =
                 response_format={"type": "json_schema", "json_schema": STAGE1_SCHEMA},
             )
             data = json.loads(resp.choices[0].message.content)
+            reasoning = data["reasoning"].strip()
             modes = sorted(set(data["modes"]))
             evidence = data["evidence"].strip()
             if modes and not evidence:
                 raise ValueError("modes present but evidence empty")
-            return {"modes": modes, "evidence": evidence, "parse_error": False}
+            return {"reasoning": reasoning, "modes": modes, "evidence": evidence, "parse_error": False}
         except Exception as e:  # noqa: BLE001 -- log and retry/backoff, this is a labeling loop
             wait = min(2 ** attempt, 30)
             if attempt == retries - 1:
-                return {"modes": [], "evidence": "", "parse_error": True, "error": str(e)}
+                return {"reasoning": "", "modes": [], "evidence": "", "parse_error": True, "error": str(e)}
             time.sleep(wait)
 
 
-def format_assistant(modes: list[str], evidence: str) -> str:
+def format_assistant(reasoning: str, modes: list[str], evidence: str) -> str:
     if not modes:
-        return "MODE: NONE"
-    return f"MODE: {', '.join(modes)}\nEVIDENCE: {evidence}"
+        return f"REASONING: {reasoning}\nMODE: NONE"
+    return f"REASONING: {reasoning}\nMODE: {', '.join(modes)}\nEVIDENCE: {evidence}"
 
 
 def label_pool(trajectories: list[dict], summaries: dict, client: OpenAI, model: str,
@@ -347,7 +349,7 @@ def write_sft_files(labels: list[dict], trajectories: list[dict], train_path: Pa
         example = {"messages": [
             {"role": "system", "content": STUDENT_STAGE1_SYS},
             {"role": "user", "content": r["student_user"]},
-            {"role": "assistant", "content": format_assistant(r["modes"], r["evidence"])},
+            {"role": "assistant", "content": format_assistant(r["reasoning"], r["modes"], r["evidence"])},
         ]}
         dest = val_path if r["trajectory_id"] in val_ids else train_path
         append_jsonl(dest, example)
