@@ -1,0 +1,7 @@
+excluding 53 held-out trajectory IDs from /Users/user/Desktop/thesis/error_localization/Experiment3/whodunit_experiment3/held_out_test_set.json
+training pool: 86 trajectories, 1924 steps
+Loading mlx-community/Qwen3-8B-4bit for the summarizer pass...
+Fetching 9 files:   0%|          | 0/9 [00:00<?, ?it/s]Fetching 9 files: 100%|██████████| 9/9 [00:00<00:00, 3148.09it/s]
+summarizer: 0it [00:00, ?it/s]summarizer: 0it [00:00, ?it/s]
+1924 steps to label (0 already cached in teacher_labels.jsonl)
+teacher labeling:   0%|          | 0/1924 [00:00<?, ?it/s]teacher labeling:   0%|          | 1/1924 [00:03<2:00:37,  3.76s/it]teacher labeling:   0%|          | 3/1924 [00:04<34:49,  1.09s/it]  

@@ -349,7 +349,7 @@ def write_sft_files(labels: list[dict], trajectories: list[dict], train_path: Pa
         example = {"messages": [
             {"role": "system", "content": STUDENT_STAGE1_SYS},
             {"role": "user", "content": r["student_user"]},
-            {"role": "assistant", "content": format_assistant(r["modes"], r["evidence"])},
+            {"role": "assistant", "content": format_assistant(r["reasoning"], r["modes"], r["evidence"])},
         ]}
         dest = val_path if r["trajectory_id"] in val_ids else train_path
         append_jsonl(dest, example)
